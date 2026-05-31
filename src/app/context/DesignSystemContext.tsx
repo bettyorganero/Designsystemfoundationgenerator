@@ -142,12 +142,7 @@ export interface DesignSystemState {
   // Colors
   colors: ColorToken[];
   // Typography
-  fontFamily: {
-    sans: string;
-    serif: string;
-    mono: string;
-    display: string;
-  };
+  fontFamilies: { name: string; value: string }[];
   typeScale: TypeScale[];
   fontWeights: { name: string; value: string }[];
   // Spacing
@@ -173,7 +168,7 @@ export interface DesignSystemState {
 interface DesignSystemContextType {
   state: DesignSystemState;
   updateColors: (colors: ColorToken[]) => void;
-  updateFontFamily: (family: Partial<DesignSystemState['fontFamily']>) => void;
+  updateFontFamilies: (families: { name: string; value: string }[]) => void;
   updateTypeScale: (scale: TypeScale[]) => void;
   updateFontWeights: (weights: { name: string; value: string }[]) => void;
   updateSpacing: (spacing: SpacingToken[]) => void;
@@ -206,12 +201,10 @@ const defaultState: DesignSystemState = {
     { name: 'text-secondary', light: '#6B7280', dark: '#9CA3AF', semantic: 'Secondary text, labels' },
     { name: 'border', light: '#E5E7EB', dark: '#374151', semantic: 'Borders, dividers' },
   ],
-  fontFamily: {
-    sans: 'Inter, system-ui, -apple-system, sans-serif',
-    serif: 'Georgia, Cambria, "Times New Roman", serif',
-    mono: '"Fira Code", "Courier New", monospace',
-    display: 'Inter, system-ui, sans-serif',
-  },
+  fontFamilies: [
+    { name: 'sans', value: 'Inter, system-ui, -apple-system, sans-serif' },
+    { name: 'serif', value: 'Georgia, Cambria, "Times New Roman", serif' },
+  ],
   typeScale: [
     { name: 'xs', size: '0.75rem', lineHeight: '1rem', letterSpacing: '0' },
     { name: 'sm', size: '0.875rem', lineHeight: '1.25rem', letterSpacing: '0' },
@@ -297,8 +290,8 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, colors }));
   };
 
-  const updateFontFamily = (family: Partial<DesignSystemState['fontFamily']>) => {
-    setState(prev => ({ ...prev, fontFamily: { ...prev.fontFamily, ...family } }));
+  const updateFontFamilies = (families: { name: string; value: string }[]) => {
+    setState(prev => ({ ...prev, fontFamilies: families }));
   };
 
   const updateTypeScale = (scale: TypeScale[]) => {
@@ -379,10 +372,12 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
     
     // Typography
     css += `  /* Typography */\n`;
-    css += `  --font-sans: ${state.fontFamily.sans};\n`;
-    css += `  --font-serif: ${state.fontFamily.serif};\n`;
-    css += `  --font-mono: ${state.fontFamily.mono};\n`;
-    css += `  --font-display: ${state.fontFamily.display};\n\n`;
+    state.fontFamilies.forEach(family => {
+      if (family.value) {
+        css += `  --font-${family.name}: ${family.value};\n`;
+      }
+    });
+    css += '\n';
     
     // Font Weights
     state.fontWeights.forEach(weight => {
@@ -600,17 +595,19 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
     const typographyVariableTypes: Record<string, string> = {};
     const typographyVariables: any[] = [];
 
-    // Font families
-    Object.entries(state.fontFamily).forEach(([key, value]) => {
-      const varName = `typography/fontFamilies/${key}`;
-      typographyVariableTypes[varName] = 'STRING';
-      typographyVariables.push({
-        name: varName,
-        type: 'STRING',
-        valuesByMode: {
-          Default: value,
-        },
-      });
+    // Font families (only export configured families with values)
+    state.fontFamilies.forEach(family => {
+      if (family.value && family.value.trim() !== '') {
+        const varName = `typography/fontFamilies/${family.name}`;
+        typographyVariableTypes[varName] = 'STRING';
+        typographyVariables.push({
+          name: varName,
+          type: 'STRING',
+          valuesByMode: {
+            Default: family.value,
+          },
+        });
+      }
     });
 
     // Type scale (font sizes)
@@ -768,7 +765,7 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
           }
 
           case 'Typography': {
-            const fontFamilies: any = {};
+            const fontFamilies: any[] = [];
             const fontSizes: any[] = [];
             const fontWeights: any[] = [];
 
@@ -776,7 +773,10 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
               const parts = variable.name.split('/');
 
               if (parts[1] === 'fontFamilies' && parts[2]) {
-                fontFamilies[parts[2]] = variable.valuesByMode.Default || '';
+                fontFamilies.push({
+                  name: parts[2],
+                  value: variable.valuesByMode.Default || '',
+                });
               } else if (parts[1] === 'fontSizes' && parts[2]) {
                 fontSizes.push({
                   name: parts[2],
@@ -792,8 +792,8 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
               }
             });
 
-            if (Object.keys(fontFamilies).length > 0) {
-              newState.fontFamily = fontFamilies;
+            if (fontFamilies.length > 0) {
+              newState.fontFamilies = fontFamilies;
             }
             if (fontSizes.length > 0) {
               newState.typeScale = fontSizes;
@@ -826,7 +826,7 @@ export function DesignSystemProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         updateColors,
-        updateFontFamily,
+        updateFontFamilies,
         updateTypeScale,
         updateFontWeights,
         updateSpacing,

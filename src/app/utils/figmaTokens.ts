@@ -333,18 +333,20 @@ export const generateFigmaTypographyTokens = (typography: any) => {
   const variableTypes: Record<string, string> = {};
   const variables: any[] = [];
 
-  // Add font families
+  // Add font families (only export configured families with values)
   if (typography.fontFamilies) {
     typography.fontFamilies.forEach((font: any) => {
-      const varName = `typography/fontFamilies/${font.name}`;
-      variableTypes[varName] = 'STRING';
-      variables.push({
-        name: varName,
-        type: 'STRING',
-        valuesByMode: {
-          Default: font.value,
-        },
-      });
+      if (font.value && font.value.trim() !== '') {
+        const varName = `typography/fontFamilies/${font.name}`;
+        variableTypes[varName] = 'STRING';
+        variables.push({
+          name: varName,
+          type: 'STRING',
+          valuesByMode: {
+            Default: font.value,
+          },
+        });
+      }
     });
   }
 

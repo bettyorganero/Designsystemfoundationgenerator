@@ -5,7 +5,7 @@ import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Separator } from '../ui/separator';
 import { Button } from '../ui/button';
-import { Plus, Trash2, Save, RotateCcw, Download, GripVertical, Copy } from 'lucide-react';
+import { Plus, Trash2, Save, RotateCcw, Download, GripVertical, Copy, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateFigmaTypographyTokens, downloadJSON, copyToClipboard } from '../../utils/figmaTokens';
 import {
@@ -172,16 +172,18 @@ const DraggableFontWeight: React.FC<DraggableFontWeightProps> = ({
 };
 
 export function TypographyPanel() {
-  const { state, updateFontFamily, updateTypeScale, updateFontWeights } = useDesignSystem();
-  
+  const { state, updateFontFamilies, updateTypeScale, updateFontWeights } = useDesignSystem();
+
   // SECTION 1: Font Family State
   const [selectedFontType, setSelectedFontType] = useState<'Sans Serif' | 'Serif' | 'Monospace' | 'Display'>('Sans Serif');
+  const [selectedFont, setSelectedFont] = useState<string>('Inter, system-ui, -apple-system, sans-serif');
   const [customFontName, setCustomFontName] = useState('');
   const [loadedCustomFonts, setLoadedCustomFonts] = useState<string[]>([]);
-  const [draftFontFamily, setDraftFontFamily] = useState(state.fontFamily);
+  const [draftFontFamilies, setDraftFontFamilies] = useState(state.fontFamilies);
   const [fontFamilyEdited, setFontFamilyEdited] = useState(false);
   const [draftFontWeights, setDraftFontWeights] = useState(state.fontWeights);
   const [fontWeightsEdited, setFontWeightsEdited] = useState(false);
+  const [previewFontIndex, setPreviewFontIndex] = useState<number | null>(null);
 
   // SECTION 2: Type Scale State
   const [draftTypeScale, setDraftTypeScale] = useState<TypeScale[]>(state.typeScale);
@@ -212,13 +214,26 @@ export function TypographyPanel() {
 
   // Sync with global state changes
   useEffect(() => {
-    setDraftFontFamily(state.fontFamily);
+    setDraftFontFamilies(state.fontFamilies);
     setDraftFontWeights(state.fontWeights);
     setDraftTypeScale(state.typeScale);
     setFontFamilyEdited(false);
     setFontWeightsEdited(false);
     setTypeScaleEditedIndices(new Set());
-  }, [state.fontFamily, state.fontWeights, state.typeScale]);
+
+    // Initialize selectedFont with first family if available
+    if (state.fontFamilies.length > 0 && state.fontFamilies[0].value) {
+      setSelectedFont(state.fontFamilies[0].value);
+    }
+  }, [state.fontFamilies, state.fontWeights, state.typeScale]);
+
+  // Update selectedFont when font type changes
+  useEffect(() => {
+    const firstFontOfType = AVAILABLE_FONTS[selectedFontType][0];
+    if (firstFontOfType) {
+      setSelectedFont(firstFontOfType.value);
+    }
+  }, [selectedFontType]);
 
   // ============ SECTION 1: FONT FAMILY FUNCTIONS ============
   
@@ -236,65 +251,46 @@ export function TypographyPanel() {
 
     const fontName = customFontName.trim();
     const fontUrl = `https://fonts.googleapis.com/css2?family=${fontName.replace(/ /g, '+')}:wght@100;200;300;400;500;600;700;800;900&display=swap`;
-    
+
     const existingLink = document.querySelector(`link[href*="${fontName.replace(/ /g, '+')}"]`);
     if (existingLink) {
       toast.success(`${fontName} is already loaded`);
       setLoadedCustomFonts([...loadedCustomFonts, fontName]);
+      const newFontValue = `"${fontName}", ${selectedFontType.toLowerCase()}`;
+      setSelectedFont(newFontValue);
       return;
     }
 
     const link = document.createElement('link');
     link.href = fontUrl;
     link.rel = 'stylesheet';
-    
+
     link.onload = () => {
       setLoadedCustomFonts([...loadedCustomFonts, fontName]);
-      
-      const fontTypeMap: { [key: string]: keyof typeof state.fontFamily } = {
-        'Sans Serif': 'sans',
-        'Serif': 'serif',
-        'Monospace': 'mono',
-        'Display': 'display'
-      };
-      
-      const fontKey = fontTypeMap[selectedFontType];
       const newFontValue = `"${fontName}", ${selectedFontType.toLowerCase()}`;
-      setDraftFontFamily({ ...draftFontFamily, [fontKey]: newFontValue });
-      setFontFamilyEdited(true);
-      
+      setSelectedFont(newFontValue);
       toast.success(`${fontName} loaded successfully!`);
       setCustomFontName('');
     };
-    
+
     link.onerror = () => {
       toast.error(`Failed to load ${fontName}. Check the font name.`);
     };
-    
+
     document.head.appendChild(link);
   };
 
-  const getCurrentFontFamily = () => {
-    const fontMap: { [key: string]: string } = {
-      'Sans Serif': draftFontFamily.sans,
-      'Serif': draftFontFamily.serif,
-      'Monospace': draftFontFamily.mono,
-      'Display': draftFontFamily.display,
-    };
-    return fontMap[selectedFontType] || draftFontFamily.sans;
+  const handleFontSelection = (fontValue: string) => {
+    setSelectedFont(fontValue);
   };
 
-  const handleFontSelection = (fontValue: string) => {
-    const fontTypeMap: { [key: string]: keyof typeof state.fontFamily } = {
-      'Sans Serif': 'sans',
-      'Serif': 'serif',
-      'Monospace': 'mono',
-      'Display': 'display'
-    };
-    
-    const fontKey = fontTypeMap[selectedFontType];
-    setDraftFontFamily({ ...draftFontFamily, [fontKey]: fontValue });
-    setFontFamilyEdited(true);
+  const getCurrentFontFamily = () => {
+    // If previewing a specific font, use that
+    if (previewFontIndex !== null && draftFontFamilies[previewFontIndex]) {
+      return draftFontFamilies[previewFontIndex].value;
+    }
+    // Otherwise use the selected font
+    return selectedFont;
   };
 
   const handleWeightChange = (index: number, value: string) => {
@@ -330,7 +326,7 @@ export function TypographyPanel() {
   };
 
   const saveFontFamilySection = () => {
-    updateFontFamily(draftFontFamily);
+    updateFontFamilies(draftFontFamilies);
     updateFontWeights(draftFontWeights);
     setFontFamilyEdited(false);
     setFontWeightsEdited(false);
@@ -338,11 +334,64 @@ export function TypographyPanel() {
   };
 
   const resetFontFamilySection = () => {
-    setDraftFontFamily(state.fontFamily);
+    setDraftFontFamilies(state.fontFamilies);
     setDraftFontWeights(state.fontWeights);
     setFontFamilyEdited(false);
     setFontWeightsEdited(false);
     toast.info('Font changes discarded');
+  };
+
+  const addFontFamily = () => {
+    // Generate a default name based on the type or existing families
+    const typeNameMap: { [key: string]: string } = {
+      'Sans Serif': 'sans',
+      'Serif': 'serif',
+      'Monospace': 'mono',
+      'Display': 'display'
+    };
+
+    let defaultName = typeNameMap[selectedFontType] || 'custom';
+
+    // If a family with this name already exists, add a number suffix
+    const existingNames = draftFontFamilies.map(f => f.name);
+    if (existingNames.includes(defaultName)) {
+      let counter = 1;
+      while (existingNames.includes(`${defaultName}-${counter}`)) {
+        counter++;
+      }
+      defaultName = `${defaultName}-${counter}`;
+    }
+
+    const newFamily = {
+      name: defaultName,
+      value: selectedFont
+    };
+
+    setDraftFontFamilies([...draftFontFamilies, newFamily]);
+    setFontFamilyEdited(true);
+    toast.success(`Font family "${defaultName}" added`);
+  };
+
+  const deleteFontFamily = (index: number) => {
+    const updated = [...draftFontFamilies];
+    updated.splice(index, 1);
+    setDraftFontFamilies(updated);
+    setFontFamilyEdited(true);
+    toast.success('Font family deleted');
+  };
+
+  const handleFontFamilyNameChange = (index: number, name: string) => {
+    const updated = [...draftFontFamilies];
+    updated[index] = { ...updated[index], name };
+    setDraftFontFamilies(updated);
+    setFontFamilyEdited(true);
+  };
+
+  const handleFontFamilyValueChange = (index: number, value: string) => {
+    const updated = [...draftFontFamilies];
+    updated[index] = { ...updated[index], value };
+    setDraftFontFamilies(updated);
+    setFontFamilyEdited(true);
   };
 
   // ============ SECTION 2: TYPE SCALE FUNCTIONS ============
@@ -597,83 +646,156 @@ export function TypographyPanel() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="space-y-3">
-                  {/* Font Type Selector */}
-                  <div>
-                    <Label className="text-[10px] text-[#666666]">Type</Label>
-                    <Select
-                      value={selectedFontType}
-                      onValueChange={(value: any) => setSelectedFontType(value)}
-                    >
-                      <SelectTrigger className="h-7 text-[11px] mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Sans Serif" className="text-[11px]">Sans Serif</SelectItem>
-                        <SelectItem value="Serif" className="text-[11px]">Serif</SelectItem>
-                        <SelectItem value="Monospace" className="text-[11px]">Monospace</SelectItem>
-                        <SelectItem value="Display" className="text-[11px]">Display</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Quick Font Selector */}
+                  <div className="p-3 bg-[#F9FAFB] rounded border border-[#E5E5E5]">
+                    <Label className="text-[10px] text-[#666666] mb-3 block">Quick Select</Label>
 
-                  {/* Font Selector based on Type */}
-                  <div>
-                    <Label className="text-[10px] text-[#666666]">Font</Label>
-                    <Select
-                      value={getCurrentFontFamily()}
-                      onValueChange={handleFontSelection}
-                    >
-                      <SelectTrigger className="h-7 text-[11px] mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AVAILABLE_FONTS[selectedFontType].map((font) => (
-                          <SelectItem key={font.value} value={font.value} className="text-[11px]">
-                            {font.label}
-                          </SelectItem>
-                        ))}
-                        {loadedCustomFonts.map((fontName) => (
-                          <SelectItem 
-                            key={fontName} 
-                            value={`"${fontName}", ${selectedFontType.toLowerCase()}`} 
-                            className="text-[11px]"
-                          >
-                            {fontName} (Custom)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Google Font Loader */}
-                  <div className="p-3 bg-white rounded border border-[#E5E5E5]">
-                    <Label className="text-[10px] text-[#666666] mb-2 block">Add Google Font</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={customFontName}
-                        onChange={(e) => setCustomFontName(e.target.value)}
-                        placeholder="e.g. 'Geist'"
-                        className="h-7 text-[11px] flex-1"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            loadGoogleFont();
-                          }
-                        }}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={loadGoogleFont}
-                        className="h-7 px-3 text-[10px]"
+                    {/* Font Type Selector */}
+                    <div className="mb-2">
+                      <Label className="text-[9px] text-[#666666]">Type</Label>
+                      <Select
+                        value={selectedFontType}
+                        onValueChange={(value: any) => setSelectedFontType(value)}
                       >
-                        <Download className="w-3 h-3 mr-1" />
-                        Load
-                      </Button>
+                        <SelectTrigger className="h-7 text-[11px] mt-0.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Sans Serif" className="text-[11px]">Sans Serif</SelectItem>
+                          <SelectItem value="Serif" className="text-[11px]">Serif</SelectItem>
+                          <SelectItem value="Monospace" className="text-[11px]">Monospace</SelectItem>
+                          <SelectItem value="Display" className="text-[11px]">Display</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <p className="text-[9px] text-[#999999] mt-1.5">
-                      Type exact Google Font name
-                    </p>
+
+                    {/* Font Selector */}
+                    <div className="mb-3">
+                      <Label className="text-[9px] text-[#666666]">Font</Label>
+                      <Select
+                        value={getCurrentFontFamily()}
+                        onValueChange={handleFontSelection}
+                      >
+                        <SelectTrigger className="h-7 text-[11px] mt-0.5">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AVAILABLE_FONTS[selectedFontType].map((font) => (
+                            <SelectItem key={font.value} value={font.value} className="text-[11px]">
+                              {font.label}
+                            </SelectItem>
+                          ))}
+                          {loadedCustomFonts.map((fontName) => (
+                            <SelectItem
+                              key={fontName}
+                              value={`"${fontName}", ${selectedFontType.toLowerCase()}`}
+                              className="text-[11px]"
+                            >
+                              {fontName} (Custom)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Google Font Loader */}
+                    <div className="mb-3 pt-2 border-t border-[#E5E5E5]">
+                      <Label className="text-[9px] text-[#666666] mb-1.5 block">Or Add Google Font</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={customFontName}
+                          onChange={(e) => setCustomFontName(e.target.value)}
+                          placeholder="e.g. 'Geist'"
+                          className="h-7 text-[11px] flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              loadGoogleFont();
+                            }
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={loadGoogleFont}
+                          className="h-7 px-3 text-[10px]"
+                        >
+                          <Download className="w-3 h-3 mr-1" />
+                          Load
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Add to Families Button */}
+                    <Button
+                      size="sm"
+                      onClick={addFontFamily}
+                      className="w-full h-7 text-[11px] bg-[#0066FF] hover:bg-[#0052CC]"
+                    >
+                      <Plus className="w-3 h-3 mr-1.5" />
+                      Add to Families
+                    </Button>
+                  </div>
+
+                  <Separator className="my-3" />
+
+                  {/* Font Families List */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-[10px] text-[#666666]">Configured Families</Label>
+                    </div>
+                    <div className="space-y-2">
+                      {draftFontFamilies.map((family, index) => (
+                        <div key={index} className={`flex items-center gap-2 p-2 rounded border ${
+                          previewFontIndex === index
+                            ? 'bg-[#E0F7FA] border-[#0066FF]'
+                            : 'bg-white border-[#E5E5E5]'
+                        }`}>
+                          <div className="flex-1">
+                            <Label className="text-[9px] text-[#666666]">Name</Label>
+                            <Input
+                              value={family.name}
+                              onChange={(e) => handleFontFamilyNameChange(index, e.target.value)}
+                              className="h-6 text-[10px] mt-0.5"
+                              placeholder="e.g. sans, serif, mono"
+                            />
+                          </div>
+                          <div className="flex-[2]">
+                            <Label className="text-[9px] text-[#666666]">Value</Label>
+                            <Input
+                              value={family.value}
+                              onChange={(e) => handleFontFamilyValueChange(index, e.target.value)}
+                              className="h-6 text-[10px] mt-0.5 font-mono"
+                              placeholder="e.g. Inter, system-ui, sans-serif"
+                            />
+                          </div>
+                          <div className="flex gap-1 mt-4">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setPreviewFontIndex(previewFontIndex === index ? null : index)}
+                              className={`h-6 w-6 p-0 ${
+                                previewFontIndex === index
+                                  ? 'bg-[#0066FF] text-white hover:bg-[#0052CC] hover:text-white'
+                                  : 'text-[#0066FF] hover:text-[#0052CC] hover:bg-[#E0F7FA]'
+                              }`}
+                              title={previewFontIndex === index ? "Stop previewing" : "Preview this font"}
+                            >
+                              <Eye className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteFontFamily(index)}
+                              className="h-6 w-6 p-0 text-[#EF4444] hover:text-[#DC2626] hover:bg-[#FEE2E2]"
+                              title="Delete font family"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Font Weights */}
@@ -1091,11 +1213,19 @@ export function TypographyPanel() {
                 viewMode === 'light' ? 'text-[#000000]' : 'text-[#FFFFFF]'
               }`}>
                 Preview · {viewMode} mode
+                {previewFontIndex !== null && draftFontFamilies[previewFontIndex] && (
+                  <span className="ml-2 px-2 py-0.5 bg-[#0066FF] text-white text-[10px] rounded">
+                    Viewing: {draftFontFamilies[previewFontIndex].name}
+                  </span>
+                )}
               </h3>
               <p className={`text-[10px] mt-0.5 ${
                 viewMode === 'light' ? 'text-[#666666]' : 'text-[#999999]'
               }`}>
-                Export includes all typography tokens in Figma Variables format
+                {previewFontIndex !== null
+                  ? `Previewing "${draftFontFamilies[previewFontIndex]?.name}" font family`
+                  : 'Export includes all typography tokens in Figma Variables format'
+                }
               </p>
             </div>
             <div className="flex gap-2">
@@ -1104,7 +1234,7 @@ export function TypographyPanel() {
                 variant="outline"
                 onClick={() => {
                   const typographyData = {
-                    fontFamilies: Object.entries(state.fontFamily).map(([name, value]) => ({ name, value })),
+                    fontFamilies: state.fontFamilies,
                     fontSizes: state.typeScale.map(scale => ({ name: scale.name, value: scale.size })),
                     fontWeights: state.fontWeights,
                     lineHeights: state.typeScale.map(scale => ({ name: scale.name, value: scale.lineHeight }))
@@ -1123,7 +1253,7 @@ export function TypographyPanel() {
                 size="sm"
                 onClick={() => {
                   const typographyData = {
-                    fontFamilies: Object.entries(state.fontFamily).map(([name, value]) => ({ name, value })),
+                    fontFamilies: state.fontFamilies,
                     fontSizes: state.typeScale.map(scale => ({ name: scale.name, value: scale.size })),
                     fontWeights: state.fontWeights,
                     lineHeights: state.typeScale.map(scale => ({ name: scale.name, value: scale.lineHeight }))

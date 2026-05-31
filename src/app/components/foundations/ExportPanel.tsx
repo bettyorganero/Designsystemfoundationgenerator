@@ -92,10 +92,9 @@ ${state.colors.map(c => {
 }).join(',\n')},
       },
       fontFamily: {
-        sans: [${state.fontFamily.sans.split(',').map(f => `'${f.trim()}'`).join(', ')}],
-        serif: [${state.fontFamily.serif.split(',').map(f => `'${f.trim()}'`).join(', ')}],
-        mono: [${state.fontFamily.mono.split(',').map(f => `'${f.trim()}'`).join(', ')}],
-        display: [${state.fontFamily.display.split(',').map(f => `'${f.trim()}'`).join(', ')}],
+${state.fontFamilies.filter(f => f.value).map(f =>
+  `        '${f.name}': [${f.value.split(',').map(v => `'${v.trim()}'`).join(', ')}]`
+).join(',\n')},
       },
       fontWeight: {
 ${state.fontWeights.map(w => `        '${w.name}': '${w.value}',`).join('\n')}
@@ -124,9 +123,7 @@ ${state.gradients.map(g => `        '${g.name}': 'var(--gradient-${g.name})',`).
 ${state.colors.map(c => `$color-${c.name}: ${state.currentTheme === 'light' ? c.light : c.dark};`).join('\n')}
 
 // Typography
-$font-sans: ${state.fontFamily.sans};
-$font-serif: ${state.fontFamily.serif};
-$font-mono: ${state.fontFamily.mono};
+${state.fontFamilies.filter(f => f.value).map(f => `$font-${f.name}: ${f.value};`).join('\n')};
 
 // Type Scale
 ${state.typeScale.map(t => `$text-${t.name}: ${t.size};`).join('\n')}

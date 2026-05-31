@@ -80,6 +80,9 @@ El archivo JSON debe seguir esta estructura:
 - **Gradients**: Valores de gradientes CSS (STRING)
 - **Layout**: Breakpoints y layout (FLOAT, se convierten a px)
 - **Typography**: Familias de fuentes (STRING), tamaños (FLOAT), y pesos (FLOAT)
+  - Solo se exportan familias de fuentes con valores configurados
+  - Type Scale y Font Weights son compartidos entre todas las familias
+  - Modo: Default (no usa Light/Dark)
 
 ### Tipos de Variables
 
